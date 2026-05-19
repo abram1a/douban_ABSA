@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>豆瓣电影评论 · 多维度情感分析</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%);
+    min-height: 100vh;
+    padding: 40px 20px;
+    color: #1a1a1a;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .header h1 {
+    font-size: 26px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    color: #6b7280;
+  }
+  .card {
+    background: white;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+  }
+  .input-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 12px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 14px 16px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s ease;
+    color: #1a1a1a;
+    background: #fafbfc;
+  }
+  textarea:focus {
+    border-color: #2563eb;
+    background: white;
+  }
+  .examples {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .example-pill {
+    font-size: 13px;
+    padding: 6px 14px;
+    background: #f3f4f6;
+    border-radius: 999px;
+    cursor: pointer;
+    border: none;
+    color: #4b5563;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  .example-pill:hover {
+    background: #e5e7eb;
+    color: #1a1a1a;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .btn-primary {
+    padding: 10px 24px;
+    background: #1a1a1a;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .btn-primary:hover { background: #374151; transform: translateY(-1px); }
+  .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+  .status-text {
+    font-size: 13px;
+    color: #9ca3af;
+  }
+  .status-text.error { color: #dc2626; }
+  .status-text.success { color: #059669; }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .dim-card {
+    background: #fafbfc;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 18px;
+    transition: all 0.2s ease;
+  }
+  .dim-card.hit {
+    background: white;
+  }
+  .dim-card.miss {
+    opacity: 0.55;
+  }
+  .dim-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .dim-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: 14px;
+    color: #1a1a1a;
+  }
+  .dim-name .icon {
+    font-size: 18px;
+  }
+  .sent-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .pill-pos { background: #d1fae5; color: #064e3b; }
+  .pill-neg { background: #fee2e2; color: #7f1d1d; }
+  .pill-neu { background: #fef3c7; color: #78350f; }
+  .pill-miss { background: #f3f4f6; color: #9ca3af; font-size: 11px; padding: 2px 10px; }
+
+  .prob-text {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+  }
+  .bar-track {
+    height: 5px;
+    background: #f3f4f6;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    transition: width 0.6s ease;
+    border-radius: 3px;
+  }
+  .fill-pos { background: #10b981; }
+  .fill-neg { background: #ef4444; }
+  .fill-neu { background: #f59e0b; }
+  .fill-miss { background: #d1d5db; }
+
+  .keywords {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .kw-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    color: #4b5563;
+  }
+  .empty-hint {
+    text-align: center;
+    padding: 40px 20px;
+    color: #9ca3af;
+    font-size: 14px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #1a1a1a;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .api-config {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #78350f;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .api-config input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: white;
+  }
+  .api-config.ok {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #064e3b;
+  }
+  .api-config.ok input { border-color: #6ee7b7; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>🎬 豆瓣电影评论 · 多维度情感分析</h1>
+    <p class="subtitle">从 5 个维度（演员 / 剧情 / 特效 / 音乐 / 导演）智能识别评论情感</p>
+  </div>
+
+  <div class="card">
+    <div class="api-config" id="apiBox">
+      <span>🔗 API 地址：</span>
+      <input type="text" id="apiUrl" value="http://127.0.0.1:8000" />
+      <button onclick="checkAPI()" class="btn-primary" style="padding: 4px 12px; font-size: 12px;">测试连接</button>
+    </div>
+
+    <div class="input-label">
+      💬 输入电影评论
+    </div>
+    <textarea id="textInput" placeholder="例如：演技太棒了，但剧情有点拖沓，特效做得很用心">演技太棒了，但剧情有点拖沓，特效做得很用心</textarea>
+
+    <div class="examples">
+      <button class="example-pill" onclick="setExample(this)">演技太棒了，但剧情有点拖沓</button>
+      <button class="example-pill" onclick="setExample(this)">配乐很加分，导演手法成熟</button>
+      <button class="example-pill" onclick="setExample(this)">完全是圈钱之作，毫无诚意</button>
+      <button class="example-pill" onclick="setExample(this)">特效炸裂，故事一般</button>
+      <button class="example-pill" onclick="setExample(this)">还行吧</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="analyzeBtn" onclick="analyze()">
+        <span id="btnContent">✨ 分析情感</span>
+      </button>
+      <span class="status-text" id="statusText"></span>
+    </div>
+  </div>
+
+  <div class="card" id="resultsCard" style="display: none;">
+    <div class="input-label" style="margin-bottom: 16px;">📊 分析结果</div>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+
+  <div class="card" id="emptyCard">
+    <div class="empty-hint">
+      ⬆️ 在上方输入评论后点击「分析情感」开始
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const DIM_ICONS = {
+    "演员": "👤",
+    "剧情": "📖",
+    "特效": "✨",
+    "音乐": "🎵",
+    "导演": "🎬",
+  };
+
+  function setExample(btn) {
+    document.getElementById('textInput').value = btn.textContent;
+  }
+
+  async function checkAPI() {
+    const apiUrl = document.getElementById('apiUrl').value.trim();
+    const apiBox = document.getElementById('apiBox');
+    try {
+      const r = await fetch(apiUrl + '/health');
+      if (r.ok) {
+        const data = await r.json();
+        apiBox.classList.add('ok');
+        apiBox.querySelector('span').textContent = '✅ API 已连接：';
+      } else {
+        throw new Error('HTTP ' + r.status);
+      }
+    } catch (e) {
+      apiBox.classList.remove('ok');
+      apiBox.querySelector('span').textContent = '⚠️ 无法连接 API：';
+      alert('无法连接到 API：' + e.message + '\n\n请确认：\n1. 已启动 python api_server.py\n2. URL 地址正确\n3. 服务已就绪');
+    }
+  }
+
+  async function analyze() {
+    const text = document.getElementById('textInput').value.trim();
+    const apiUrl = document.getElementById('apiUrl').value.trim();
+    const btn = document.getElementById('analyzeBtn');
+    const btnContent = document.getElementById('btnContent');
+    const statusText = document.getElementById('statusText');
+
+    if (!text) {
+      statusText.textContent = '请先输入评论内容';
+      statusText.className = 'status-text error';
+      return;
+    }
+
+    btn.disabled = true;
+    btnContent.innerHTML = '<span class="spinner"></span> 分析中...';
+    statusText.textContent = '';
+    statusText.className = 'status-text';
+
+    const t0 = performance.now();
+
+    try {
+      const response = await fetch(apiUrl + '/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, top_k_words: 3 }),
+      });
+
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status + ': ' + await response.text());
+      }
+
+      const data = await response.json();
+      const elapsed = Math.round(performance.now() - t0);
+
+      renderResults(data, elapsed);
+      statusText.textContent = `分析完成 · 耗时 ${elapsed}ms`;
+      statusText.className = 'status-text success';
+    } catch (e) {
+      statusText.textContent = '错误：' + e.message;
+      statusText.className = 'status-text error';
+      alert('调用 API 失败：' + e.message + '\n\n请确认 api_server.py 已启动且模型已训练完成');
+    } finally {
+      btn.disabled = false;
+      btnContent.innerHTML = '✨ 分析情感';
+    }
+  }
+
+  function renderResults(data, elapsed) {
+    const grid = document.getElementById('resultsGrid');
+    grid.innerHTML = '';
+
+    const dimensions = data.dimensions || {};
+    const order = ["演员", "剧情", "特效", "音乐", "导演"];
+
+    for (const dimName of order) {
+      const info = dimensions[dimName];
+      if (!info) continue;
+
+      const card = document.createElement('div');
+      const isHit = info.present;
+      card.className = 'dim-card ' + (isHit ? 'hit' : 'miss');
+
+      let sentClass = 'pill-miss';
+      let fillClass = 'fill-miss';
+      let sentLabel = '未提及';
+
+      if (isHit) {
+        const sent = info.sentiment;
+        if (sent === '正面') { sentClass = 'pill-pos'; fillClass = 'fill-pos'; }
+        else if (sent === '负面') { sentClass = 'pill-neg'; fillClass = 'fill-neg'; }
+        else { sentClass = 'pill-neu'; fillClass = 'fill-neu'; }
+        sentLabel = sent;
+      }
+
+      const probPercent = Math.round((info.prob || 0) * 100);
+      const probLabel = isHit ? `置信度 ${probPercent}%` : `检测概率 ${probPercent}%`;
+
+      let keywordsHtml = '';
+      if (isHit && info.top_words && info.top_words.length > 0) {
+        keywordsHtml = '<div class="keywords">' +
+          info.top_words.map(w => `<span class="kw-tag">${escapeHtml(w)}</span>`).join('') +
+          '</div>';
+      }
+
+      card.innerHTML = `
+        <div class="dim-header">
+          <div class="dim-name">
+            <span class="icon">${DIM_ICONS[dimName] || ''}</span>
+            <span>${dimName}</span>
+          </div>
+          <span class="sent-pill ${sentClass}">${sentLabel}</span>
+        </div>
+        <div class="prob-text">${probLabel}</div>
+        <div class="bar-track">
+          <div class="bar-fill ${fillClass}" style="width: ${probPercent}%;"></div>
+        </div>
+        ${keywordsHtml}
+      `;
+
+      grid.appendChild(card);
+    }
+
+    document.getElementById('emptyCard').style.display = 'none';
+    document.getElementById('resultsCard').style.display = 'block';
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  document.getElementById('textInput').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') analyze();
+  });
+
+  window.addEventListener('load', () => {
+    setTimeout(checkAPI, 500);
+  });
+</script>
+
+</body>
+</html>
