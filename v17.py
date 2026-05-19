@@ -1069,6 +1069,10 @@ if __name__ == "__main__":
     parser.add_argument("--bayes_trials", type=int, default=BAYES_TRIALS)
     parser.add_argument("--model_dir", default=OUT_DIR)
     parser.add_argument("--text", default=None)
+    parser.add_argument("--smoke_test", action="store_true",
+                        help="冒烟测试：抽样小数据 + 缩减 epoch/trial，快速跑通全流程")
+    parser.add_argument("--smoke_n", type=int, default=2000,
+                        help="冒烟测试样本数（默认 2000）")
     args = parser.parse_args()
 
     if args.stage == "infer":
@@ -1088,6 +1092,44 @@ if __name__ == "__main__":
         except Exception:
             pass
     if df is None: raise RuntimeError("所有编码均失败")
+
+    # ════════════════════════════════════════════════════════════
+    # 冒烟测试模式：抽样小数据 + 缩减 epoch/trial，验证全流程跑通
+    # ════════════════════════════════════════════════════════════
+    if args.smoke_test:
+        print("\n" + "█" * 60)
+        print("🚀 冒烟测试模式（流程验证用，非正式实验）")
+        print("█" * 60)
+        original_n = len(df)
+        # 先粗清洗
+        df = df.dropna(subset=["Comment", "Star"]).copy()
+        df["Comment"] = df["Comment"].astype(str)
+        df["Star"] = df["Star"].astype(int).clip(1, 5)
+        df = df[df["Comment"].str.len() >= 3].reset_index(drop=True)
+
+        # 分层抽样：保留评论数最多的 60 部电影，每部至多 50 条
+        mv_col_tmp = ("Movie_Name_CN" if "Movie_Name_CN" in df.columns else
+                      "movie" if "movie" in df.columns else df.columns[0])
+        top_movies = df[mv_col_tmp].value_counts().head(60).index
+        df = df[df[mv_col_tmp].isin(top_movies)].reset_index(drop=True)
+        df = (df.groupby(mv_col_tmp, group_keys=False)
+                .apply(lambda g: g.sample(min(len(g), 50), random_state=SEED))
+                .reset_index(drop=True))
+        if len(df) > args.smoke_n:
+            df = df.sample(args.smoke_n, random_state=SEED).reset_index(drop=True)
+        print(f"  样本数: {original_n:,} → {len(df):,} (覆盖 {df[mv_col_tmp].nunique()} 部电影)")
+
+        # 缩减训练配置（同步到模块全局）
+        import sys
+        _mod = sys.modules[__name__]
+        _mod.EPOCHS_CNN = 2
+        _mod.EPOCHS_LSTM = 2
+        _mod.EPOCHS_FINETUNE = 1
+        _mod.BATCH_SIZE = 16
+        args.bayes_trials = 2
+        print(f"  EPOCHS_CNN=2  EPOCHS_LSTM=2  EPOCHS_FINETUNE=1")
+        print(f"  BATCH_SIZE=16  bayes_trials=2")
+        print("█" * 60 + "\n")
 
     df = df.dropna(subset=["Comment", "Star"])
     df["Comment"] = df["Comment"].astype(str)
